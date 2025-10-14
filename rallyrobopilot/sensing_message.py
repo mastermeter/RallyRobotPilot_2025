@@ -1,5 +1,6 @@
 import struct
-
+import socket
+import imageio
 import numpy as np
 
 
@@ -86,8 +87,7 @@ class SensingSnapshotManager:
             self.pending_data = self.pending_data[sizeheader+message_size:]
 
 
-import socket
-import imageio
+
 class NetworkDataCmdInterface:
     def __init__(self, callback, address = "127.0.0.1", port = 7654):
         self.data = []
