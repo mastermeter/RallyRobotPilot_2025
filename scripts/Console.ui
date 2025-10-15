@@ -28,9 +28,9 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="horizontalLayout">
     <item>
-     <layout class="QVBoxLayout" name="sessionLayout">
+     [cite_start]<layout class="QVBoxLayout" name="sessionLayout"> [cite: 2]
       <item>
-       <layout class="QHBoxLayout" name="connectionLayout">
+       [cite_start]<layout class="QHBoxLayout" name="connectionLayout"> [cite: 2]
         <item>
          <widget class="QLabel" name="connectionLed">
           <property name="minimumSize">
@@ -56,7 +56,7 @@
         <item>
          <widget class="QLabel" name="connectionStatusLabel">
           <property name="text">
-           <string>Disconnected</string>
+           [cite_start]<string>Disconnected</string> [cite: 5]
           </property>
          </widget>
         </item>
@@ -71,9 +71,48 @@
          </sizepolicy>
         </property>
         <property name="text">
-         <string>Record (R)</string>
+         [cite_start]<string>Record (R)</string> [cite: 6]
         </property>
        </widget>
+      </item>
+      <item>
+       <widget class="Line" name="line">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QFormLayout" name="saveFormLayout">
+        <item row="0" column="0" colspan="2">
+         <layout class="QHBoxLayout" name="savePathLayout">
+          <item>
+           <widget class="QLabel" name="savePathLabel">
+            <property name="text">
+             <string>Path:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="browseButton">
+            <property name="text">
+             <string>Browse...</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="label_2">
+          <property name="text">
+           <string>Filename:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLineEdit" name="filenameEdit"/>
+        </item>
+       </layout>
       </item>
       <item>
        <widget class="QPushButton" name="saveRecordButton">
@@ -84,7 +123,7 @@
          </sizepolicy>
         </property>
         <property name="text">
-         <string>Save (E)</string>
+         [cite_start]<string>Save (E)</string> [cite: 7]
         </property>
        </widget>
       </item>
@@ -114,7 +153,7 @@
          </size>
         </property>
         <property name="text">
-         <string>LEFT (A)</string>
+         [cite_start]<string>LEFT (A)</string> [cite: 9]
         </property>
        </widget>
       </item>
@@ -141,7 +180,7 @@ OFF</string>
          </size>
         </property>
         <property name="text">
-         <string>RIGHT (D)</string>
+         [cite_start]<string>RIGHT (D)</string> [cite: 12]
         </property>
        </widget>
       </item>
@@ -154,21 +193,21 @@ OFF</string>
          </size>
         </property>
         <property name="text">
-         <string>BACKWARD (S)</string>
+         [cite_start]<string>BACKWARD (S)</string> [cite: 13]
         </property>
        </widget>
       </item>
      </layout>
     </item>
     <item>
-     <layout class="QVBoxLayout" name="snapshotLayout">
+     [cite_start]<layout class="QVBoxLayout" name="snapshotLayout"> [cite: 2]
       <item>
        <widget class="QLabel" name="label">
         <property name="text">
          <string>Snapshots Recorded:</string>
         </property>
         <property name="alignment">
-         <set>Qt::AlignCenter</set>
+         [cite_start]<set>Qt::AlignCenter</set> [cite: 14]
         </property>
        </widget>
       </item>
@@ -178,14 +217,14 @@ OFF</string>
          <font>
           <pointsize>24</pointsize>
           <weight>75</weight>
-          <bold>true</bold>
+          [cite_start]<bold>true</bold> [cite: 15]
          </font>
         </property>
         <property name="text">
-         <string>0</string>
+         [cite_start]<string>0</string> [cite: 15]
         </property>
         <property name="alignment">
-         <set>Qt::AlignCenter</set>
+         [cite_start]<set>Qt::AlignCenter</set> [cite: 15]
         </property>
        </widget>
       </item>
