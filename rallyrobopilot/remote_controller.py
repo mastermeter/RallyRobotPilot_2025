@@ -1,10 +1,11 @@
 
+# rallyrobopilot/remote_controller.py
+
 from ursina import *
 import socket
-import select
 import numpy as np
 
-from flask import Flask, request, jsonify
+from flask import request, jsonify
 
 
 from .sensing_message import SensingSnapshot, SensingSnapshotManager
@@ -74,28 +75,35 @@ class RemoteController(Entity):
                                          held_keys['s'] or held_keys["down arrow"],
                                          held_keys['a'] or held_keys["left arrow"],
                                          held_keys['d'] or held_keys["right arrow"])
-            snapshot.car_position = self.car.world_position
+            
+            # --- MODIFIED LINE ---
+            # Convert the Ursina Vec3 object to a standard Python tuple before sending
+            snapshot.car_position = tuple(self.car.world_position)
+            
             snapshot.car_speed = self.car.speed
             snapshot.car_angle = self.car.rotation_y
             snapshot.raycast_distances = self.car.multiray_sensor.collect_sensor_values()
 
             #   Collect last rendered image
-            tex = base.win.getDisplayRegion(0).getScreenshot()
+            """ tex = base.win.getDisplayRegion(0).getScreenshot()
             arr = tex.getRamImageAs("RGB")
             data = np.frombuffer(arr, np.uint8)
             image = data.reshape(tex.getYSize(), tex.getXSize(), 3)
             image = image[::-1, :, :]#   Image arrives with inverted Y axis
 
-            snapshot.image = image
+            snapshot.image = image """
 
             msg_mngr = SensingSnapshotManager()
             data = msg_mngr.pack(snapshot)
 
-            self.connected_client.settimeout(0.01)
             try:
+                self.connected_client.settimeout(0.01)
                 self.connected_client.sendall(data)
-            except socket.error as e:
-                print(f"Socket error: {e}")
+            except (socket.error, BrokenPipeError) as e:
+                print(f"[INFO] Client disconnected. Cleaning up connection.")
+                self.connected_client.close()
+                self.connected_client = None
+                return
 
             self.last_sensing = time.time()
 
@@ -213,11 +221,14 @@ class RemoteController(Entity):
             except Exception as e:
                 printv(e)
 
-
     def open_connection_socket(self):
         print("Waiting for connections")
         self.listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        
+        # --- ADD THIS LINE ---
+        # Allow the operating system to reuse the port address immediately
+        self.listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        
         self.listen_socket.bind((self.ip_address, self.port))
-        # self.listen_socket.setblocking(False)
         self.listen_socket.settimeout(0.01)
         self.listen_socket.listen()

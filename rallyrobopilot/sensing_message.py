@@ -1,124 +1,119 @@
-import struct
+# rallyrobopilot/sensing_message.py
+
+import pickle
 import socket
-import imageio
-import numpy as np
+import lzma
+import struct # <-- Import the struct module
 
-
-def iter_unpack(format, data):
-    nbr_bytes = struct.calcsize(format)
-    return struct.unpack(format, data[:nbr_bytes]), data[nbr_bytes:]
-
-"""
-    SensingSnapshot is a packing/unpacking class for diverse car simulation related information
-"""
 class SensingSnapshot:
     def __init__(self):
-        #   Forward - Backward - Left - Right
-        self.current_controls = (0,0,0,0)
-        self.car_position = (0,0,0)
+        self.image = None
+        self.raycast_distances = []
+        self.car_position = (0, 0, 0)
         self.car_speed = 0
         self.car_angle = 0
-        self.raycast_distances = [0]
-        self.image = None
+        self.current_controls = (False, False, False, False)
 
-    def pack(self):
-        byte_data = b''
-        byte_data += struct.pack(">BBBB", *self.current_controls)
-        byte_data += struct.pack(">fffff", self.car_position[0], self.car_position[1], self.car_position[2], self.car_angle, self.car_speed)
-
-        nbr_raycasts = len(self.raycast_distances)
-        byte_data += struct.pack(">B" + "f" * nbr_raycasts, nbr_raycasts, *self.raycast_distances)
-
-        if self.image is not None:
-            byte_data += struct.pack(">ii", self.image.shape[0], self.image.shape[1])
-            byte_data +=  self.image.tobytes()
-        else:
-            byte_data += struct.pack(">ii", 0, 0)
-
-        return byte_data
-
-    def unpack(self, data):
-        self.current_controls, data = iter_unpack(">BBBB", data)
-        (x,y,z,a,s), data = iter_unpack(">fffff", data)
-        self.car_position = (x,y,z)
-        self.car_angle = a
-        self.car_speed = s
-
-        (nbr_raycasts,), data = iter_unpack(">B", data)
-        self.raycast_distances, data = iter_unpack(">" + "f" * nbr_raycasts, data)
-
-        (h,w), data = iter_unpack(">ii", data)
-
-        if h*w > 0:
-            self.image = np.frombuffer(data, np.uint8).reshape(h,w,3)
-        else:
-            self.image = None
-
-"""
-#   Snapshot formatting and managing class
-#       --> pass it the chunks received via socket, the class correctly split and parse the received messages
-#       uses a callback to inform higher level code of reception of a complete SensingSnapshot
-"""
+# --- MODIFIED CLASS: SensingSnapshotManager ---
 class SensingSnapshotManager:
-    def __init__(self, received_snapshot_callback = None):
+    def __init__(self):
         self.pending_data = b''
-        self.received_snapshot_callback = received_snapshot_callback
+        # Header is a 4-byte unsigned integer
+        self.header_size = struct.calcsize('!I') 
 
     def pack(self, snapshot):
-        data = snapshot.pack()
-        data = struct.pack(">i", len(data)) + data
+        """Packs a snapshot into a binary message with a length header."""
+        payload = lzma.compress(pickle.dumps(snapshot))
+        header = struct.pack('!I', len(payload)) # '!' for network byte order
+        return header + payload
 
-        return data
+    def parse(self):
+        """
+        Parses the pending data buffer to extract complete messages.
+        Returns a list of unpacked snapshot objects.
+        """
+        messages = []
+        while len(self.pending_data) > self.header_size:
+            # Read the length of the next message
+            payload_len = struct.unpack('!I', self.pending_data[:self.header_size])[0]
+            
+            # Check if the full message has been received
+            full_message_len = self.header_size + payload_len
+            if len(self.pending_data) < full_message_len:
+                break # Not enough data yet, wait for more
 
+            # Extract the payload
+            payload = self.pending_data[self.header_size:full_message_len]
+            
+            try:
+                snapshot = pickle.loads(lzma.decompress(payload))
+                messages.append(snapshot)
+            except (lzma.LZMAError, pickle.UnpicklingError) as e:
+                print(f"[Parser] Error decoding message: {e}")
 
-    def add_message_chunk(self, chunk):
-        self.pending_data += chunk
-
-        sizeheader = struct.calcsize(">i")
-        message_size = struct.unpack(">i", self.pending_data[:sizeheader])[0]
-
-        if message_size+sizeheader <= len(self.pending_data):
-            snapshot = SensingSnapshot()
-
-            snapshot.unpack(self.pending_data[sizeheader:sizeheader+message_size])
-            if self.received_snapshot_callback is not None:
-                self.received_snapshot_callback(snapshot)
-
-            self.pending_data = self.pending_data[sizeheader+message_size:]
-
+            # Remove the processed message from the buffer
+            self.pending_data = self.pending_data[full_message_len:]
+        
+        return messages
 
 
 class NetworkDataCmdInterface:
-    def __init__(self, callback, address = "127.0.0.1", port = 7654):
-        self.data = []
+    def __init__(self, msg_callback, autoconnect=True):
+        self.ip_address = "127.0.0.1"
+        self.port = 7654
+        self.client_socket = None
+        self.msg_callback = msg_callback
+        self.snapshot_manager = SensingSnapshotManager()
+        self.autoconnect = autoconnect
 
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 125536)
-        self.socket.connect((address, port))
-        # self.socket.setblocking(False)
-        self.socket.settimeout(0.05)
+        if self.autoconnect:
+            self.connect_to_server()
 
-        self.msg_mngr = SensingSnapshotManager(callback)
-
-    def send_cmd(self, cmd):
-        self.socket.send(bytes(cmd, "utf-8"))
-
-    def recv_msg(self):
+    def connect_to_server(self):
+        """Initializes the connection to the server."""
         try:
-            while True:
-                data = self.socket.recv(2**20)
-
-                if len(data) == 0:
-                    break
-
-                self.msg_mngr.add_message_chunk(data)
-
+            if self.client_socket is None:
+                self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.client_socket.settimeout(0.01)
+                self.client_socket.connect((self.ip_address, self.port))
+                print("[Network] Connection established with the server.")
         except Exception as e:
-            pass
+            print(f"[Network] Failed to connect to server: {e}")
+            self.client_socket = None
 
-    def process_sensing_message(self, sensing_snapshot):
-        #   Sample function to use as a callback
-        print("sensing_snapshot.car.position =", sensing_snapshot.car_position)
+    def send_cmd(self, command_str):
+        """Sends a command string to the server."""
+        if self.client_socket:
+            try:
+                self.client_socket.sendall(command_str.encode('utf-8'))
+            except Exception as e:
+                print(f"[Network] Error sending command: {e}")
+                self.client_socket = None
 
-        imageio.imsave("last_image.png", sensing_snapshot.image)
-
+    # --- MODIFIED METHOD: recv_msg ---
+    def recv_msg(self):
+        """Receives and processes messages from the server."""
+        if self.client_socket:
+            try:
+                # Receive new data and add it to the buffer
+                data = self.client_socket.recv(4096)
+                if not data:
+                    print("[Network] Server closed the connection.")
+                    self.client_socket.close()
+                    self.client_socket = None
+                    return
+                
+                self.snapshot_manager.pending_data += data
+                
+                # Try to parse any complete messages from the buffer
+                unpacked_messages = self.snapshot_manager.parse()
+                
+                for msg in unpacked_messages:
+                    if self.msg_callback:
+                        self.msg_callback(msg)
+            except socket.timeout:
+                pass 
+            except Exception as e:
+                print(f"[Network] Error receiving data: {e}")
+                self.client_socket.close()
+                self.client_socket = None
