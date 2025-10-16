@@ -1,7 +1,4 @@
 .venv/
-*.png
-*.npz
-*.pth
 rallyrobopilot/__pycache__/*
 rallyrobopilot.egg-info/*
 scripts/__pycache__/*
