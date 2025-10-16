@@ -97,7 +97,7 @@ class AutopilotController:
                 self.key_states[action] = True
             elif not should_press and self.key_states[action]:
                 self.network_interface.send_cmd(f"release {action};")
-                self.key_states[action] = False
+                self.key_states[action] = False 
 
 class WorkConsole(QMainWindow):
     # ... (The rest of this file is unchanged) ...
