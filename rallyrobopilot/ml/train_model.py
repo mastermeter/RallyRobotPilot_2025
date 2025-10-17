@@ -2,9 +2,7 @@
 
 import os
 import sys
-# --- MODIFICATION: Import argparse ---
 import argparse
-# --- END MODIFICATION ---
 
 # CRITICAL: Ajouter le chemin des DLLs PyTorch AVANT tout import
 torch_lib = os.path.join(os.path.dirname(sys.executable), 'Lib', 'site-packages', 'torch', 'lib')
@@ -25,49 +23,55 @@ from .utils import LossPlotter
 # --- Hyperparameters ---
 LEARNING_RATE = 0.001
 BATCH_SIZE = 64
-NUM_EPOCHS = 500
-EARLY_STOPPING_PATIENCE = 30 
+NUM_EPOCHS = 1000
+EARLY_STOPPING_PATIENCE = 75
 EARLY_STOPPING_MIN_DELTA = 0.0001
-
-# --- MODIFICATION: Removed hardcoded MODEL_SAVE_PATH ---
 
 def main():
     """Main function to run the training and validation process."""
 
-    # --- MODIFICATION: Add command-line argument parsing ---
     parser = argparse.ArgumentParser(description="Train the Robopilot model.")
     parser.add_argument(
         "--name",
         type=str,
         default="run_default",
-        help="A name for this training run, used for saving model and figure files (e.g., 'v3_more_data')."
+        help="A name for this training run, used for saving model and figure files."
     )
     args = parser.parse_args()
     run_name = args.name
     print(f"🚀 Starting training run: '{run_name}'")
-    # --- END MODIFICATION ---
 
     device = torch.device("cpu")
     print(f"Using device: {device}")
-
+    data_sources = ['normal','mirrored']
     # 1. Prepare Data
-    train_loader, val_loader, mean, std = prepare_data(batch_size=BATCH_SIZE, sources=['bords','normal','reverse','frein-gaz'], remove_outliers=True)
+    train_loader, val_loader, mean, std = prepare_data(batch_size=BATCH_SIZE, sources= data_sources,include_speed=True, remove_outliers=True)
     
     if train_loader is None or val_loader is None:
         print("Data loading failed. Exiting.")
         return
 
     # 2. Initialize Model, Loss Function, and Optimizer
-    hidden_layer_config = [200, 150, 100, 50]
+    hidden_layer_config = [256, 144, 128, 96]
     model = RobopilotMLP(input_size=16,
                          output_size=4,
                          hidden_layers=hidden_layer_config,
-                         dropout_rate=0.15).to(device)
+                         dropout_rate=0.10).to(device)
     
     criterion = nn.BCELoss()
+    # (Binary Cross-Entropy Loss) is a good choice here because your task is fundamentally a multi-label binary classification problem.
+
+
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
+    # a regularization technique used to prevent overfitting. Weight decay adds a small penalty for large weight values in the model. 
+    # This encourages the optimizer to find simpler solutions with smaller weights, which tend to generalize better.
+
+
     plotter = LossPlotter()
-    scheduler = StepLR(optimizer, step_size=10, gamma=0.9)
+    scheduler = StepLR(optimizer, step_size=10, gamma=0.95)
+    # instantiates a learning rate scheduler from PyTorch.
+    # The decay factor. The learning rate will be multiplied by this value at each step.
+
 
     # Early Stopping variables
     best_val_loss = float('inf')
@@ -79,7 +83,7 @@ def main():
     print("="*50)
     print(f" Run Name: \t\t{run_name}")
     print(f" Device: \t\t{device}")
-    print(f" Data Sources: \t\t{['normal', 'reverse']}")
+    print(f" Data Sources: \t\t{['normal', 'mirrored']}")
     print("-" * 50)
     print("Hyperparameters:")
     print(f"  - Learning Rate: \t{LEARNING_RATE}")
@@ -134,17 +138,20 @@ def main():
             patience_counter = 0
             
             script_dir = os.path.dirname(os.path.abspath(__file__))
-            # --- MODIFICATION: Use run_name for dynamic filename ---
             best_model_path = os.path.join(script_dir, f"../../models/robopilot_model_{run_name}.pth")
-            # --- END MODIFICATION ---
             model_dir = os.path.dirname(best_model_path)
             os.makedirs(model_dir, exist_ok=True)
             
+            # In train_model.py
             torch.save({
                 'model_state_dict': model.state_dict(),
                 'hidden_layers': hidden_layer_config,
                 'mean': mean,
-                'std': std
+                'std': std,
+                'run_name': run_name,
+                'final_val_loss': best_val_loss,
+                'epochs_trained': epoch + 1,
+                'data_sources_used': data_sources
             }, best_model_path)
             print(f"   -> New best model saved with Val Loss: {best_val_loss:.4f}")
 
@@ -161,9 +168,7 @@ def main():
     else:
         print("No model was saved as validation loss did not improve.")
 
-    # --- MODIFICATION: Use run_name for dynamic filename ---
     final_plot_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"../../figures/loss_evolution_{run_name}.png")
-    # --- END MODIFICATION ---
     plot_dir = os.path.dirname(final_plot_path)
     os.makedirs(plot_dir, exist_ok=True)
     

@@ -9,3 +9,4 @@ psd-tools3==1.8.2
 setuptools
 scipy>=1.8.0
 matplotlib==3.10.7
+scikit-learn    

@@ -37,7 +37,7 @@ CLEAN_STYLE = """
 
 class AutopilotController:
     """Handles the model inference and sends driving commands."""
-    def __init__(self, network_interface, model_path, activation_threshold=0.15, num_features=15):
+    def __init__(self, network_interface, model_path, activation_threshold=0.5, num_features=15):
         self.network_interface = network_interface
         self.num_features = num_features
         
@@ -89,15 +89,64 @@ class AutopilotController:
         with torch.no_grad():
             predictions = self.model(input_tensor)
 
-        print(f"Model Predictions: Fwd={predictions[0][0]:.2f}, Bck={predictions[0][1]:.2f}, Lft={predictions[0][2]:.2f}, Rgt={predictions[0][3]:.2f}")
-        
-        actions = {
-            "forward": predictions[0][0].item() > self.activation_threshold,
-            "back":    predictions[0][1].item() > self.activation_threshold,
-            "left":    predictions[0][2].item() > self.activation_threshold,
-            "right":   predictions[0][3].item() > self.activation_threshold,
-        }
+        # Extraire les prédictions
+        fwd_pred = predictions[0][0].item()
+        bck_pred = predictions[0][1].item()
+        lft_pred = predictions[0][2].item()
+        rgt_pred = predictions[0][3].item()
 
+        print(f"Model Predictions: Fwd={fwd_pred:.2f}, Bck={bck_pred:.2f}, Lft={lft_pred:.2f}, Rgt={rgt_pred:.2f}")
+        
+        threshold = self.activation_threshold
+        
+        fwd_pred = predictions[0][0].item()
+        bck_pred = predictions[0][1].item()
+        lft_pred = predictions[0][2].item()
+        rgt_pred = predictions[0][3].item()
+
+        print(f"Model Predictions: Fwd={fwd_pred:.2f}, Bck={bck_pred:.2f}, Lft={lft_pred:.2f}, Rgt={rgt_pred:.2f}")
+        
+        threshold = self.activation_threshold
+        
+        threshold = self.activation_threshold
+        
+        # --- LOGIQUE DE CONTRÔLE OPTIMISÉE POUR LA CONDUITE GAZ/FREIN ---
+        
+        # 1. Gestion de l'Accélération et du Freinage
+        should_fwd = False
+        should_back = False
+        
+        # Si la demande de Frein/Reculer atteint le seuil, elle est prioritaire (should_fwd devient False)
+        # Bck_Pred > Threshold est l'interrupteur du frein.
+        if bck_pred >= threshold:
+            should_back = True
+            should_fwd = False # Ne jamais avancer si l'on freine
+        
+        # Sinon, si la demande d'Avancer atteint le seuil (ce qui sera presque toujours le cas avec 1.00), on avance.
+        elif fwd_pred >= threshold:
+            should_fwd = True
+            should_back = False
+        
+        # 2. Gestion de la Direction (Laisser inchangée, elle gère déjà l'exclusivité GAUCHE/DROITE)
+        should_left = False
+        should_right = False
+        
+        if lft_pred >= threshold and lft_pred >= rgt_pred:
+            should_left = True
+            should_right = False
+        elif rgt_pred >= threshold and rgt_pred > lft_pred:
+            should_right = True
+            should_left = False
+            
+        # 3. Application des actions
+        actions = {
+            "forward": should_fwd,
+            "back":    should_back,
+            "left":    should_left,
+            "right":   should_right,
+        }
+        # --- FIN LOGIQUE OPTIMISÉE ---
+        
         for action, should_press in actions.items():
             if should_press and not self.key_states[action]:
                 self.network_interface.send_cmd(f"push {action};")
@@ -287,7 +336,6 @@ class WorkConsole(QMainWindow):
         super().keyReleaseEvent(event)
 
     def save_record(self):
-        # ... (Cette fonction reste inchangée) ...
         if self.saving_worker is not None or not self.saveRecordButton.isEnabled(): return
         if self.recording: self.toggle_record()
         self.saveRecordButton.setText("Saving...")
@@ -308,7 +356,6 @@ class WorkConsole(QMainWindow):
         self.saving_worker.start()
 
     def on_record_save_done(self):
-        # ... (Cette fonction reste inchangée) ...
         print(f"[+] Recorded data saved to {self.saving_worker.path}")
         self.saving_worker = None
         self.saveRecordButton.setText("Save (E)")
@@ -318,9 +365,9 @@ class WorkConsole(QMainWindow):
 
 if __name__ == "__main__":
     init()
-    # --- MODIFICATION: Argument de ligne de commande simplifié ---
+    # --- MODIFICATION: Argument de ligne de commande simplifié (seuil 0.5 par défaut) ---
     parser = argparse.ArgumentParser(description="Run the Rally Robopilot Work Console")
-    parser.add_argument("-t", "--threshold", type=float, default=0.15, help="Activation threshold for model predictions (e.g., 0.2)")
+    parser.add_argument("-t", "--threshold", type=float, default=0.5, help="Activation threshold for model predictions (e.g., 0.5)")
     args = parser.parse_args()
 
     app = QApplication(sys.argv)
