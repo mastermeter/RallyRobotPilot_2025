@@ -6,21 +6,11 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>700</width>
-    <height>250</height>
-   </rect>
+    <width>1000</width> <height>350</height> </rect>
   </property>
   <property name="minimumSize">
    <size>
-    <width>700</width>
-    <height>250</height>
-   </size>
-  </property>
-  <property name="maximumSize">
-   <size>
-    <width>700</width>
-    <height>250</height>
-   </size>
+    <width>1000</width> <height>350</height> </size>
   </property>
   <property name="windowTitle">
    <string>Robopilot Work Console</string>
@@ -28,9 +18,9 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="horizontalLayout">
     <item>
-     [cite_start]<layout class="QVBoxLayout" name="sessionLayout"> [cite: 2]
+     <layout class="QVBoxLayout" name="sessionLayout">
       <item>
-       [cite_start]<layout class="QHBoxLayout" name="connectionLayout"> [cite: 2]
+       <layout class="QHBoxLayout" name="connectionLayout">
         <item>
          <widget class="QLabel" name="connectionLed">
           <property name="minimumSize">
@@ -56,27 +46,204 @@
         <item>
          <widget class="QLabel" name="connectionStatusLabel">
           <property name="text">
-           [cite_start]<string>Disconnected</string> [cite: 5]
+           <string>Disconnected</string>
           </property>
          </widget>
         </item>
        </layout>
       </item>
       <item>
-       <widget class="QPushButton" name="recordDataButton">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="text">
-         [cite_start]<string>Record (R)</string> [cite: 6]
+       <widget class="Line" name="line_2">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
         </property>
        </widget>
       </item>
       <item>
+       <layout class="QFormLayout" name="modelConfigLayout">
+        <item row="0" column="0" colspan="2">
+         <widget class="QLabel" name="modelConfigLabel">
+          <property name="font">
+           <font>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="text">
+           <string>Configuration du Modèle</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0" colspan="2">
+         <widget class="QPushButton" name="browseModelButton">
+          <property name="text">
+           <string>Choisir un modèle...</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0" colspan="2">
+         <widget class="QLabel" name="modelPathLabel">
+          <property name="text">
+           <string>Aucun modèle sélectionné</string>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="featuresLabel">
+          <property name="text">
+           <string>Entrées (Features):</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QComboBox" name="featuresComboBox">
+          <item>
+           <property name="text">
+            <string>15 (Rayons)</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>16 (Rayons + Vitesse)</string>
+           </property>
+          </item>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
        <widget class="Line" name="line">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="recordDataButton">
+        <property name="text">
+         <string>Record (R)</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="verticalSpacer">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>20</width>
+          <height>40</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <layout class="QGridLayout" name="controlsGrid">
+      <item row="1" column="0">
+       <widget class="QPushButton" name="leftButton">
+        <property name="minimumSize">
+         <size>
+          <width>100</width>
+          <height>50</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>LEFT (A)</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QPushButton" name="rightButton">
+        <property name="minimumSize">
+         <size>
+          <width>100</width>
+          <height>50</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>RIGHT (D)</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QPushButton" name="backwardButton">
+        <property name="minimumSize">
+         <size>
+          <width>100</width>
+          <height>50</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>BACKWARD (S)</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QPushButton" name="forwardButton">
+        <property name="minimumSize">
+         <size>
+          <width>100</width>
+          <height>50</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>FORWARD (W)</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QPushButton" name="AutopilotButton">
+        <property name="minimumSize">
+         <size>
+          <width>100</width>
+          <height>50</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>Autopilot (Q):
+OFF</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <layout class="QVBoxLayout" name="snapshotLayout">
+      <item>
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>Snapshots Recorded:</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="nbrSnapshotSaved">
+        <property name="font">
+         <font>
+          <pointsize>24</pointsize>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="text">
+         <string>0</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Line" name="line_3">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
         </property>
@@ -116,115 +283,8 @@
       </item>
       <item>
        <widget class="QPushButton" name="saveRecordButton">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
         <property name="text">
-         [cite_start]<string>Save (E)</string> [cite: 7]
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </item>
-    <item>
-     <layout class="QGridLayout" name="controlsGrid">
-      <item row="0" column="1">
-       <widget class="QPushButton" name="forwardButton">
-        <property name="minimumSize">
-         <size>
-          <width>100</width>
-          <height>50</height>
-         </size>
-        </property>
-        <property name="text">
-         <string>FORWARD (W)</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="0">
-       <widget class="QPushButton" name="leftButton">
-        <property name="minimumSize">
-         <size>
-          <width>100</width>
-          <height>50</height>
-         </size>
-        </property>
-        <property name="text">
-         [cite_start]<string>LEFT (A)</string> [cite: 9]
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="1">
-       <widget class="QPushButton" name="AutopilotButton">
-        <property name="minimumSize">
-         <size>
-          <width>100</width>
-          <height>50</height>
-         </size>
-        </property>
-        <property name="text">
-         <string>Autopilot (Q):
-OFF</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="2">
-       <widget class="QPushButton" name="rightButton">
-        <property name="minimumSize">
-         <size>
-          <width>100</width>
-          <height>50</height>
-         </size>
-        </property>
-        <property name="text">
-         [cite_start]<string>RIGHT (D)</string> [cite: 12]
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1">
-       <widget class="QPushButton" name="backwardButton">
-        <property name="minimumSize">
-         <size>
-          <width>100</width>
-          <height>50</height>
-         </size>
-        </property>
-        <property name="text">
-         [cite_start]<string>BACKWARD (S)</string> [cite: 13]
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </item>
-    <item>
-     [cite_start]<layout class="QVBoxLayout" name="snapshotLayout"> [cite: 2]
-      <item>
-       <widget class="QLabel" name="label">
-        <property name="text">
-         <string>Snapshots Recorded:</string>
-        </property>
-        <property name="alignment">
-         [cite_start]<set>Qt::AlignCenter</set> [cite: 14]
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="nbrSnapshotSaved">
-        <property name="font">
-         <font>
-          <pointsize>24</pointsize>
-          <weight>75</weight>
-          [cite_start]<bold>true</bold> [cite: 15]
-         </font>
-        </property>
-        <property name="text">
-         [cite_start]<string>0</string> [cite: 15]
-        </property>
-        <property name="alignment">
-         [cite_start]<set>Qt::AlignCenter</set> [cite: 15]
+         <string>Save (E)</string>
         </property>
        </widget>
       </item>

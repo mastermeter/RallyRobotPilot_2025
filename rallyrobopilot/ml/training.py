@@ -12,7 +12,7 @@ from .dataset import RallyDataset # Note the relative import
 class SensingSnapshot:
     pass
 
-def prepare_data(batch_size=32, test_size=0.2, sources=['normal'], remove_outliers=False):
+def prepare_data(batch_size=32, test_size=0.2, sources=['frein-gaz'], remove_outliers=False):
     """
     Loads '.npz' recordings, processes them with Z-score normalization,
     and returns DataLoaders and normalization statistics.
@@ -56,7 +56,7 @@ def prepare_data(batch_size=32, test_size=0.2, sources=['normal'], remove_outlie
 
     print(f"\nTotal snapshots loaded: {len(all_snapshots)}")
 
-    features = [s.raycast_distances for s in all_snapshots]
+    features = [s.raycast_distances + [s.car_speed] for s in all_snapshots]
     labels = [s.current_controls for s in all_snapshots]
 
     X = np.array(features, dtype=np.float32)

@@ -1,7 +1,7 @@
 # scripts/main.py
 
 from rallyrobopilot import prepare_game_app, RemoteController
-from flask import Flask, request, jsonify
+from flask import Flask
 from threading import Thread
 
 # Setup Flask

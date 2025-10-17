@@ -37,58 +37,65 @@ CLEAN_STYLE = """
 
 class AutopilotController:
     """Handles the model inference and sends driving commands."""
-    def __init__(self, network_interface, model_path):
+    def __init__(self, network_interface, model_path, activation_threshold=0.15, num_features=15):
         self.network_interface = network_interface
+        self.num_features = num_features
         
         if not os.path.exists(model_path):
             print(f"{Fore.RED}❌ Error: Model file not found at {model_path}{Style.RESET_ALL}")
-            exit()
+            raise FileNotFoundError(f"Model file not found at {model_path}")
 
         checkpoint = torch.load(model_path, weights_only=False)
 
-        # --- MODIFICATION: Load mean and std for normalization ---
         if 'mean' not in checkpoint or 'std' not in checkpoint:
-            print(f"{Fore.RED}❌ Error: Model checkpoint is missing 'mean' or 'std' for normalization.")
-            print(f"{Fore.YELLOW}   Please retrain the model with the latest script to generate these values.{Style.RESET_ALL}")
-            exit()
+            print(f"{Fore.RED}❌ Error: Model checkpoint is missing 'mean' or 'std' for normalization.{Style.RESET_ALL}")
+            raise ValueError("Checkpoint missing normalization data.")
             
         self.mean = checkpoint['mean']
         self.std = checkpoint['std']
         
-        hidden_layers_from_file = checkpoint.get('hidden_layers', [128, 64])
-        print(f"{Fore.CYAN}   Instantiating model with architecture: {hidden_layers_from_file}{Style.RESET_ALL}")
+        # --- MODIFICATION: Vérifier la cohérence des features ---
+        if len(self.mean) != self.num_features:
+            print(f"{Fore.RED}❌ Error: Feature count mismatch! UI expects {self.num_features} but model was trained with {len(self.mean)}.{Style.RESET_ALL}")
+            raise ValueError("Feature count mismatch.")
 
-        self.model = RobopilotMLP(hidden_layers=hidden_layers_from_file, dropout_rate=0.0)
+        hidden_layers_from_file = checkpoint.get('hidden_layers', [128, 64])
+        print(f"{Fore.CYAN}   Instantiating model with {self.num_features} inputs and architecture: {hidden_layers_from_file}{Style.RESET_ALL}")
+
+        self.model = RobopilotMLP(input_size=self.num_features, hidden_layers=hidden_layers_from_file, dropout_rate=0.0)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         
+        self.activation_threshold = activation_threshold
         print(f"{Fore.GREEN}✅ Model and normalization stats loaded successfully from {model_path}{Style.RESET_ALL}")
-        # --- END MODIFICATION ---
-
+        print(f"{Fore.CYAN}   Using activation threshold: {self.activation_threshold}{Style.RESET_ALL}")
+        
         self.model.eval()
         self.key_states = {"forward": False, "back": False, "left": False, "right": False}
 
     def process_frame(self, snapshot):
         ray_distances = np.array(snapshot.raycast_distances, dtype=np.float32)
+
+        if self.num_features == 16:
+            car_speed = np.array([snapshot.car_speed], dtype=np.float32)
+            features = np.concatenate([ray_distances, car_speed])
+        else:
+            features = ray_distances
         
-        # --- MODIFICATION: Apply Z-score normalization ---
-        normalized_distances = (ray_distances - self.mean) / self.std
-        # --- END MODIFICATION ---
+        normalized_features = (features - self.mean) / self.std
+        features_str = ", ".join([f"{d:.2f}" for d in normalized_features])
+        print(f"{Fore.YELLOW}Normalized Input ({self.num_features}): [{features_str}]{Style.RESET_ALL}")
 
-        distances_str = ", ".join([f"{d:.2f}" for d in normalized_distances])
-        print(f"{Fore.YELLOW}Normalized Input: [{distances_str}]{Style.RESET_ALL}")
-
-        input_tensor = torch.from_numpy(normalized_distances).unsqueeze(0)
+        input_tensor = torch.from_numpy(normalized_features).unsqueeze(0)
         with torch.no_grad():
             predictions = self.model(input_tensor)
 
         print(f"Model Predictions: Fwd={predictions[0][0]:.2f}, Bck={predictions[0][1]:.2f}, Lft={predictions[0][2]:.2f}, Rgt={predictions[0][3]:.2f}")
         
-        activation_threshold = 0.15
         actions = {
-            "forward": predictions[0][0].item() > activation_threshold,
-            "back":    predictions[0][1].item() > activation_threshold,
-            "left":    predictions[0][2].item() > activation_threshold,
-            "right":   predictions[0][3].item() > activation_threshold,
+            "forward": predictions[0][0].item() > self.activation_threshold,
+            "back":    predictions[0][1].item() > self.activation_threshold,
+            "left":    predictions[0][2].item() > self.activation_threshold,
+            "right":   predictions[0][3].item() > self.activation_threshold,
         }
 
         for action, should_press in actions.items():
@@ -97,11 +104,10 @@ class AutopilotController:
                 self.key_states[action] = True
             elif not should_press and self.key_states[action]:
                 self.network_interface.send_cmd(f"release {action};")
-                self.key_states[action] = False 
+                self.key_states[action] = False
 
 class WorkConsole(QMainWindow):
-    # ... (The rest of this file is unchanged) ...
-    def __init__(self, model_path_from_args):
+    def __init__(self, activation_threshold):
         super().__init__()
         ui_path = os.path.join(os.path.dirname(__file__), "Console.ui")
         loadUi(ui_path, self)
@@ -109,11 +115,12 @@ class WorkConsole(QMainWindow):
         self.autopiloting = False
         self.recording = False
         self.connected_to_game = False
-        self.model_path = model_path_from_args
+        self.model_path = None
+        self.activation_threshold = activation_threshold
         self.controller = None
         self.recorded_data = []
         self.saving_worker = None
-        self.save_path = os.getcwd()
+        self.save_path = 'data'
 
         self.network_interface = NetworkDataCmdInterface(self.on_message_received, autoconnect=True)
         self.msg_timer = QTimer()
@@ -123,6 +130,10 @@ class WorkConsole(QMainWindow):
         self.connection_timer = QTimer()
         self.connection_timer.setSingleShot(True)
         self.connection_timer.timeout.connect(self.on_connection_lost)
+
+        # --- Connexion des nouveaux widgets ---
+        self.browseModelButton.clicked.connect(self.browse_for_model)
+        self.featuresComboBox.currentIndexChanged.connect(self.update_ui_state)
 
         self.forwardButton.pressed.connect(lambda: self.send_manual_key("forward", True))
         self.forwardButton.released.connect(lambda: self.send_manual_key("forward", False))
@@ -143,9 +154,23 @@ class WorkConsole(QMainWindow):
         self.savePathLabel.setText(f"Path: {self.save_path}")
 
         self.set_connection_status(False)
-    
+        self.update_ui_state() # Appel initial pour tout désactiver
+
+    def browse_for_model(self):
+        # Ouvre une boîte de dialogue pour choisir un fichier .pth
+        fname, _ = QFileDialog.getOpenFileName(self, 'Choisir un modèle', 'models', "PyTorch Models (*.pth)")
+        if fname:
+            self.model_path = fname
+            # Affiche le nom du fichier (tronqué si trop long)
+            display_name = os.path.basename(fname)
+            if len(display_name) > 25:
+                display_name = "..." + display_name[-22:]
+            self.modelPathLabel.setText(display_name)
+            self.controller = None # Réinitialiser le contrôleur pour le forcer à se recharger
+        self.update_ui_state()
+
     def browse_for_folder(self):
-        directory = QFileDialog.getExistingDirectory(self, "Select Folder", self.save_path)
+        directory = QFileDialog.getExistingDirectory(self, "Choisir un dossier", self.save_path)
         if directory:
             self.save_path = directory
             display_path = self.save_path
@@ -160,12 +185,14 @@ class WorkConsole(QMainWindow):
         self.set_connection_status(True)
         self.connection_timer.start(2000)
 
-        if self.autopiloting and self.controller:
-            self.controller.process_frame(msg)
-        elif self.recording:
-            msg.image = None
+        # --- MODIFICATION: Logique d'enregistrement ---
+        if self.recording:
+            # S'assurer que l'image est None et que les données sont enregistrées
+            msg.image = None 
             self.recorded_data.append(msg)
             self.nbrSnapshotSaved.setText(str(len(self.recorded_data)))
+        elif self.autopiloting and self.controller:
+            self.controller.process_frame(msg)
     
     def on_connection_lost(self):
         if self.connected_to_game:
@@ -182,48 +209,56 @@ class WorkConsole(QMainWindow):
         self.update_ui_state()
     
     def update_ui_state(self):
+        # Activer/désactiver le bouton Autopilot
+        can_autopilot = self.connected_to_game and self.model_path is not None
+        self.AutopilotButton.setEnabled(can_autopilot)
         self.AutopilotButton.setText("Autopilot (Q):\n" + ("ON" if self.autopiloting else "OFF"))
+
+        # Logique pour l'enregistrement
+        self.recordDataButton.setEnabled(self.connected_to_game and not self.autopiloting)
         self.recordDataButton.setText("Stop Rec (R)" if self.recording else "Record (R)")
         self.recordDataButton.setProperty("recording", self.recording)
         self.recordDataButton.style().polish(self.recordDataButton)
 
-        is_idle = self.connected_to_game and not self.autopiloting
-        enable_manual = is_idle and not self.recording
-        
+        # Contrôles manuels
+        enable_manual = self.connected_to_game and not self.autopiloting and not self.recording
         self.forwardButton.setEnabled(enable_manual)
         self.backwardButton.setEnabled(enable_manual)
         self.leftButton.setEnabled(enable_manual)
         self.rightButton.setEnabled(enable_manual)
         
-        self.AutopilotButton.setEnabled(self.connected_to_game)
-        self.recordDataButton.setEnabled(self.connected_to_game)
-        
+        # Logique pour la sauvegarde
         can_save = len(self.recorded_data) > 0 and not self.recording and self.filenameEdit.text() != ""
         self.saveRecordButton.setEnabled(can_save)
 
     def toggle_autopilot(self):
-        if not self.connected_to_game: return
-        if not self.autopiloting and self.recording:
-            self.toggle_record()
+        if not self.AutopilotButton.isEnabled(): return
         
         self.autopiloting = not self.autopiloting
         
         if self.autopiloting:
-            if self.controller is None:
-                self.controller = AutopilotController(self.network_interface, self.model_path)
-            print(f"{Fore.CYAN}🤖 Autopilot Activated.{Style.RESET_ALL}")
+            try:
+                # Si le contrôleur n'existe pas ou si le modèle a changé, le charger
+                if self.controller is None:
+                    # Récupérer la valeur de la ComboBox (0 pour 15, 1 pour 16)
+                    num_features = 16 if self.featuresComboBox.currentIndex() == 1 else 15
+                    self.controller = AutopilotController(self.network_interface, self.model_path, self.activation_threshold, num_features)
+                print(f"{Fore.CYAN}🤖 Autopilot Activated.{Style.RESET_ALL}")
+            except Exception as e:
+                # Si le chargement échoue (ex: mauvais nb de features), désactiver l'autopilot
+                print(f"{Fore.RED}❌ Failed to activate autopilot: {e}{Style.RESET_ALL}")
+                self.autopiloting = False
+                self.controller = None
         else:
             print(f"{Fore.MAGENTA}🛑 Autopilot Deactivated.{Style.RESET_ALL}")
             if self.controller:
                 for key in self.controller.key_states:
                     if self.controller.key_states[key]: self.send_manual_key(key, False)
-        self.update_ui_state()
-
-    def toggle_record(self):
-        if not self.connected_to_game: return
-        if not self.recording and self.autopiloting:
-            self.toggle_autopilot()
         
+        self.update_ui_state()
+        
+    def toggle_record(self):
+        if not self.recordDataButton.isEnabled(): return
         self.recording = not self.recording
         print(f"{Fore.CYAN}Recording {'ON' if self.recording else 'OFF'}{Style.RESET_ALL}")
         self.update_ui_state()
@@ -235,22 +270,13 @@ class WorkConsole(QMainWindow):
     def keyPressEvent(self, event: QKeyEvent):
         if event.isAutoRepeat(): return
         key = event.key()
-
-        if key == Qt.Key.Key_R:
-            self.toggle_record()
-            return
-        elif key == Qt.Key.Key_Q:
-            self.toggle_autopilot()
-            return
-        elif key == Qt.Key.Key_E:
-            if self.saveRecordButton.isEnabled():
-                self.save_record()
-            return
+        if key == Qt.Key.Key_R: self.toggle_record()
+        elif key == Qt.Key.Key_Q: self.toggle_autopilot()
+        elif key == Qt.Key.Key_E and self.saveRecordButton.isEnabled(): self.save_record()
 
         key_map = {Qt.Key.Key_W: "forward", Qt.Key.Key_S: "back", Qt.Key.Key_A: "left", Qt.Key.Key_D: "right"}
-        if self.connected_to_game and not self.autopiloting and not self.recording and key in key_map:
+        if self.forwardButton.isEnabled() and key in key_map:
             self.send_manual_key(key_map[key], True)
-        
         super().keyPressEvent(event)
 
     def keyReleaseEvent(self, event: QKeyEvent):
@@ -261,14 +287,12 @@ class WorkConsole(QMainWindow):
         super().keyReleaseEvent(event)
 
     def save_record(self):
+        # ... (Cette fonction reste inchangée) ...
         if self.saving_worker is not None or not self.saveRecordButton.isEnabled(): return
         if self.recording: self.toggle_record()
-
         self.saveRecordButton.setText("Saving...")
-        
         base_filename = self.filenameEdit.text()
         full_path = os.path.join(self.save_path, f"{base_filename}.npz")
-        
         class ThreadedSaver(QThread):
             def __init__(self, path, data):
                 super().__init__()
@@ -277,7 +301,6 @@ class WorkConsole(QMainWindow):
             def run(self):
                 with lzma.open(self.path, "wb") as f:
                     pickle.dump(self.data, f)
-
         self.saving_worker = ThreadedSaver(full_path, self.recorded_data)
         self.recorded_data = []
         self.nbrSnapshotSaved.setText("0")
@@ -285,21 +308,24 @@ class WorkConsole(QMainWindow):
         self.saving_worker.start()
 
     def on_record_save_done(self):
+        # ... (Cette fonction reste inchangée) ...
         print(f"[+] Recorded data saved to {self.saving_worker.path}")
         self.saving_worker = None
         self.saveRecordButton.setText("Save (E)")
         self.filenameEdit.clear()
         self.update_ui_state()
 
+
 if __name__ == "__main__":
     init()
+    # --- MODIFICATION: Argument de ligne de commande simplifié ---
     parser = argparse.ArgumentParser(description="Run the Rally Robopilot Work Console")
-    parser.add_argument("model_path", type=str, help="Path to the trained model (.pth) file")
+    parser.add_argument("-t", "--threshold", type=float, default=0.15, help="Activation threshold for model predictions (e.g., 0.2)")
     args = parser.parse_args()
 
     app = QApplication(sys.argv)
     app.setStyleSheet(CLEAN_STYLE)
     
-    window = WorkConsole(model_path_from_args=args.model_path)
+    window = WorkConsole(activation_threshold=args.threshold)
     window.show()
     sys.exit(app.exec())
